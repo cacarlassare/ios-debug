@@ -6,23 +6,17 @@
 //
 
 import Foundation
-
-
-private enum DebugType {
-    case info
-    case success
-    case error
-}
+import os.log
 
 
 public class Debug: NSObject {
 
     private override init() {  super.init()  }
-    static var printLogIntoDevice = false
+    public static var printLogIntoDevice = false
     
     
     // This method prints any object received by parameter
-    static fileprivate func printWithOptions<T>( _ object: @autoclosure() -> T, _ file: String, _ function: String, _ line: Int, debugType: DebugType = .info) {
+    static fileprivate func printWithOptions<T>( _ object: @autoclosure() -> T, _ file: String, _ function: String, _ line: Int, debugType: OSLogType) {
         
         #if DEBUG
         
@@ -44,37 +38,35 @@ public class Debug: NSObject {
         gFormatter.dateFormat = "HH:mm:ss:SSS"
         let timestamp = gFormatter.string(from: Date())
         var icon: String
-        
+
         switch debugType {
-            case .info:
+            case .info, .debug:
                 icon = "ℹ️"
-            case .success:
+            case .default:
                 icon = "✅"
-            case .error:
+            case .error, .fault:
                 icon = "❌"
+            default:
+                icon = "ℹ️"
         }
         
-        if !Debug.printLogIntoDevice {
-            if stringRepresentation.count > 0 {
-                Swift.print("\n\(icon) \(timestamp) {\(queue)} \(fileURL) > \(function)[\(line)]:\n")
-                if !(obj is String) {
-                    Swift.print("String representation: " + stringRepresentation.replacingOccurrences(of: "\\n", with: "\n") + "\n")
-                }
-                Swift.dump(obj)
-            } else {
-                Swift.print("\n\(icon) \(timestamp) {\(queue)} \(fileURL) > \(function)[\(line)]:\n")
-                Swift.dump(obj)
-            }
+        // Print to Xcode console
+        Swift.print("\(icon) \(timestamp) {\(queue)} \(fileURL) > \(function)[\(line)]:")
+            
+        if stringRepresentation.count > 0 {
+            Swift.dump(stringRepresentation.replacingOccurrences(of: "\\n", with: "\n") + "\n")
         } else {
+            Swift.dump("\(obj) \n")
+        }
+        
+        // Print to device
+        if Debug.printLogIntoDevice {
+            os_log("%@ %@ {%@} %@ > %@[%d]", type: debugType, icon, timestamp, queue, fileURL, function, line)
+            
             if stringRepresentation.count > 0 {
-                NSLog("\n\(icon) \(timestamp) {\(queue)} \(fileURL) > \(function)[\(line)]:\n")
-                if !(obj is String) {
-                    NSLog("String representation: " + stringRepresentation.replacingOccurrences(of: "\\n", with: "\n") + "\n")
-                }
-                NSLog("\(obj)")
+                os_log("%@\n", type: debugType, stringRepresentation.replacingOccurrences(of: "\\n", with: "\n"))
             } else {
-                NSLog("\n\(icon) \(timestamp) {\(queue)} \(fileURL) > \(function)[\(line)]:\n")
-                NSLog("\(obj)")
+                os_log("%@\n", type: debugType, obj as! CVarArg)
             }
         }
         
@@ -89,10 +81,14 @@ public class Debug: NSObject {
     }
     
     static public func printSuccess( _ object: Any?, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
-        self.printWithOptions(object, file, function, line, debugType: .success)
+        self.printWithOptions(object, file, function, line, debugType: .default)
     }
     
     static public func printError( _ object: Any?, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
         self.printWithOptions(object, file, function, line, debugType: .error)
+    }
+    
+    static public func printFault( _ object: Any?, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        self.printWithOptions(object, file, function, line, debugType: .fault)
     }
 }
